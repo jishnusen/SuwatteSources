@@ -383,7 +383,7 @@ class Target {
         return {
             url,
             headers: {
-                referer: "https://comic.app/",
+                referer: "https://comic.cc/",
             },
         };
     }
