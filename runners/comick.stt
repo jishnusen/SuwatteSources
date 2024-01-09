@@ -412,8 +412,6 @@ class Target {
                 return { items: await this.getUpdateHighlights(true) };
             case "recently_added":
                 return { items: this.homepage.news.map(utilts_1.MDComicToHighlight) };
-            case "most_viewed_7":
-                return { items: this.homepage.trending["7"].map(utilts_1.MDComicToHighlight) };
             case "most_viewed_30":
                 return { items: this.homepage.trending["30"].map(utilts_1.MDComicToHighlight) };
             case "popular_new_7":
