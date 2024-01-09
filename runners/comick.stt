@@ -412,8 +412,6 @@ class Target {
                 return { items: await this.getUpdateHighlights(true) };
             case "recently_added":
                 return { items: this.homepage.news.map(utilts_1.MDComicToHighlight) };
-            case "most_viewed_7":
-                return { items: this.homepage.trending["7"].map(utilts_1.MDComicToHighlight) };
             case "most_viewed_30":
                 return { items: this.homepage.trending["30"].map(utilts_1.MDComicToHighlight) };
             case "popular_new_7":
@@ -460,6 +458,7 @@ class Target {
             params: {
                 page: "1",
                 order: hot ? "hot" : "new",
+                tachiyomi: "true",
             },
         });
         const data = JSON.parse(str)?.map((v) => (0, utilts_1.MDComicToHighlight)(v.md_comics));
