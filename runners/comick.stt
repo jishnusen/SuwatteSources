@@ -184,11 +184,6 @@ exports.EXPLORE_COLLECTIONS = [
         style: daisuke_1.SectionStyle.DEFAULT,
     },
     {
-        id: "most_viewed_7",
-        title: "Most Viewed Titles This Week",
-        style: daisuke_1.SectionStyle.DEFAULT,
-    },
-    {
         id: "most_viewed_30",
         title: "Most Viewed Titles This Month",
         style: daisuke_1.SectionStyle.GALLERY,
