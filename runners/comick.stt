@@ -248,14 +248,14 @@ class Target {
     info = {
         id: "app.comick",
         name: "ComicK",
-        version: 0.52,
+        version: 0.53,
         website: "https://comick.cc/home",
         supportedLanguages: [],
         thumbnail: "comick.png",
         minSupportedAppVersion: "5.0",
     };
     client = new NetworkClient();
-    API_URL = "https://api.comick.fun";
+    API_URL = "https://api.comick.cc";
     async getContent(contentId) {
         const data = await this.getManga(contentId);
         const content = (0, utilts_1.MangaToContent)(data, contentId);
@@ -378,7 +378,7 @@ class Target {
         return {
             url,
             headers: {
-                referer: "https://comic.cc/",
+                referer: "https://comick.cc/",
             },
         };
     }
@@ -449,7 +449,7 @@ class Target {
         throw new Error("Unknown Section ID");
     }
     async getUpdateHighlights(hot) {
-        const { data: str } = await this.client.get("https://api.comick.cc/chapter", {
+        const { data: str } = await this.client.get(`${this.API_URL}/chapter`, {
             params: {
                 page: "1",
                 order: hot ? "hot" : "new",
