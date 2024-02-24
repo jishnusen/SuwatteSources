@@ -9,7 +9,8 @@
     "dev": "nodemon",
     "build": "daisuke build",
     "serve": "daisuke serve",
-    "lint": "eslint"
+    "lint": "eslint",
+    "browse": "ts-node src/http/simple.ts"
   },
   "private": true,
   "keywords": [
