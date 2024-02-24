@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suwatte Runner Test</title>
+<script>
+window.onload = function() {
+    // Make a GET request to the "/runners" endpoint
+    fetch('/runners')
+    .then(response => {
+        // Check if the response is OK (status code 200)
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        // Parse the JSON in the response
+        return response.json();
+    })
+    .then(data => {
+        // Display the JSON data in a div with id "runners-list"
+        const runnersListDiv = document.getElementById('runners-list');
+        // Iterate through each runner and create a link
+        data.forEach(runner => {
+            const runnerLink = document.createElement('a');
+            runnerLink.textContent = runner;
+            runnerLink.href = `/runner.html?runner=${encodeURIComponent(runner)}`; // Add runner name as query parameter
+            runnerLink.classList.add('runner-link'); // Add a class for styling if needed
+            const lineBreak = document.createElement('br');
+            runnersListDiv.appendChild(runnerLink);
+            runnersListDiv.appendChild(lineBreak);
+        });
+    })
+    .catch(error => {
+        console.error('There was a problem with the fetch operation:', error);
+    });
+};
+</script>
+</head>
+<div id="runners-list"></div>
+</body>
+</html>
