@@ -142,8 +142,9 @@ class NewToki extends tachiyomi_1.TachiParsedHttpSource {
     mangaDetailsParse($) {
         const captcha = $("div.page-title > h2 > a > span").first().text().trim();
         if (captcha.includes("Captcha")) {
-            console.log(this.baseUrl + "/bbs/captcha.php");
-            throw new CloudflareError(this.baseUrl + "/bbs/captcha.php");
+            const captchaUrl = $("link[rel='canonical']").attr("href");
+            console.log("Got captcha request, resolve at: " + captchaUrl);
+            throw new CloudflareError(captchaUrl);
         }
         const cover = $("div.row div.view-img > img").first().attr("src") ?? "";
         const title = $("div.view-content > span > b").first().text().trim();
@@ -200,7 +201,9 @@ class NewToki extends tachiyomi_1.TachiParsedHttpSource {
     pageListParse($) {
         const captcha = $("div.page-title > h2 > a > span").first().text().trim();
         if (captcha.includes("Captcha")) {
-            throw new CloudflareError(this.baseUrl + "/bbs/captcha.php");
+            const captchaUrl = $("link[rel='canonical']").attr("href");
+            console.log("Got captcha request, resolve at: " + captchaUrl);
+            throw new CloudflareError(captchaUrl);
         }
         const htmlDataRegex = /html_data\+='([^']+)'/g;
         const script = $("script:contains(\"html_data\")").first().text();
