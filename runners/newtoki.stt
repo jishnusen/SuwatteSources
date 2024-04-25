@@ -8,9 +8,18 @@ const INFO = {
     id: "newtoki",
     name: "NewToki",
     thumbnail: "newtoki.png",
-    version: 0.1,
+    version: 0.2,
+    website: "https://jishnusen.github.io/newtoki.html"
 };
-exports.Target = new tachiyomi_1.TachiBuilder(INFO, template_1.NewToki);
+class NewtokiBuilder extends tachiyomi_1.TachiBuilder {
+    config = {
+        cloudflareResolutionURL: "https://jishnusen.github.io/newtoki.html",
+    };
+    constructor(info, template) {
+        super(info, template);
+    }
+}
+exports.Target = new NewtokiBuilder(INFO, template_1.NewToki);
 
 },{"../../template/tachiyomi":5,"./template":2}],2:[function(require,module,exports){
 "use strict";
