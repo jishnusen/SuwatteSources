@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+var page = 1;
+function popular(pnum) {
+    // Extracting runner name from query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const runnerName = urlParams.get('runner');
+    document.title = runnerName
+
+    if (!runnerName) {
+        console.error('Runner name not provided.');
+        return;
+    }
+
+    // Make a GET request to the "/popular" endpoint with the runner name query parameter
+    fetch(`/popular?runner=${encodeURIComponent(runnerName)}&page=${page}`)
+    .then(response => {
+        // Check if the response is OK (status code 200)
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        // Parse the JSON in the response
+        return response.json();
+    })
+    .then(data => {
+        // Display the JSON data in a div with id "popular-comics"
+        const popularDiv = document.getElementById('popular-comics');
+        // Iterate through each element in the result array and create a line
+        console.log(data)
+        popularDiv.innerHTML = "";
+        data.results.forEach(result => {
+            const comicLine = initComicLine(result);
+            popularDiv.appendChild(comicLine);
+            popularDiv.appendChild(document.createElement('br'));
+        });
+        document.getElementById("popular-next").style.display = data.isLastPage ? "none" : "inline-block";
+        document.getElementById("popular-prev").style.display = page == 1 ? "none" : "inline-block";
+    })
+    .catch(error => {
+        console.error('There was a problem with the fetch operation:', error);
+    });
+};
+function popularPrev() {
+    if (page == 1) {
+        return
+    }
+    page = page - 1;
+    popular();
+}
+function popularNext() {
+    page = page + 1;
+    popular();
+}
+
+var searchPage = 1;
+function search() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const runnerName = urlParams.get('runner');
+    document.title = runnerName
+
+    if (!runnerName) {
+        console.error('Runner name not provided.');
+        return;
+    }
+
+    // Make a GET request to the "/popular" endpoint with the runner name query parameter
+    query = document.getElementById('search-text').value;
+    if (query.length == 0) {
+      return
+    }
+    fetch(`/search?runner=${encodeURIComponent(runnerName)}&search=${encodeURIComponent(query)}&page=${searchPage}`)
+    .then(response => {
+        // Check if the response is OK (status code 200)
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        // Parse the JSON in the response
+        return response.json();
+    }).then(data => {
+        // Display the JSON data in a div with id "popular-comics"
+        const searchDiv = document.getElementById('search-results');
+        // Iterate through each element in the result array and create a line
+        console.log(data)
+        searchDiv.innerHTML = "";
+        data.results.forEach(result => {
+            comicLine = initComicLine(result);
+            searchDiv.appendChild(comicLine);
+            searchDiv.appendChild(document.createElement('br'));
+        });
+        document.getElementById("search-next").style.display = data.isLastPage ? "none" : "inline-block";
+        document.getElementById("search-prev").style.display = searchPage == 1 ? "none" : "inline-block";
+    })
+    .catch(error => {
+        console.error('There was a problem with the fetch operation:', error);
+    });
+}
+function initComicLine(comic) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const runnerName = urlParams.get('runner');
+    const comicLine = document.createElement('a');
+    comicLine.textContent = comic.title;
+    comicLine.href = `/comic.html?runner=${encodeURIComponent(runnerName)}&id=${encodeURIComponent(comic.id)}`;
+    return comicLine;
+}
+function searchInit() {
+    searchPage = 1;
+    search();
+}
+function searchNext() {
+    searchPage += 1;
+    search();
+}
+function searchPrev() {
+    if (searchPage == 1) return;
+    searchPage -= 1;
+    search();
+}
+window.onload = popular;
+</script>
+</head>
+<body>
+<h2>popular</h2>
+<button onclick="popularPrev()" id="popular-prev">prev</button>
+<button onclick="popularNext()" id="popular-next">next</button>
+<div id="popular-comics"></div>
+<h2>search</h2>
+<input type="text" id="search-text" placeholder="comic">
+<button onclick="searchInit()">search</button>
+<!-- <button onclick="popularPrev()">prev</button> -->
+<button onclick="searchPrev()" id="search-prev">prev</button>
+<button onclick="searchNext()" id="search-next">next</button>
+<div id="search-results"></div>
+</body>
+</html>

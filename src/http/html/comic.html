@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+function chapters() {
+    // Extracting runner name from query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const runnerName = urlParams.get('runner');
+    const comicId = urlParams.get('id');
+    document.title = runnerName
+
+    if (!runnerName) {
+        console.error('Runner name not provided.');
+        return;
+    }
+
+    // Make a GET request to the "/popular" endpoint with the runner name query parameter
+    fetch(`/chapters?runner=${encodeURIComponent(runnerName)}&id=${comicId}`)
+    .then(response => {
+        // Check if the response is OK (status code 200)
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        // Parse the JSON in the response
+        return response.json();
+    })
+    .then(data => {
+        chapters = data.sort((c1, c2) => c1.number - c2.number);
+        // Display the JSON data in a div with id "popular-runs"
+        const popularRunsDiv = document.getElementById('chapters');
+        // Iterate through each element in the result array and create a line
+        popularRunsDiv.innerHTML = "";
+        chapters.forEach(result => {
+            const chapter = initChapter(result);
+            popularRunsDiv.appendChild(chapter);
+            popularRunsDiv.appendChild(document.createElement('br'));
+        });
+    })
+    .catch(error => {
+        console.error('There was a problem with the fetch operation:', error);
+    });
+};
+function initChapter(chapter) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const runnerName = urlParams.get('runner');
+    const comicId = urlParams.get('id');
+    const chapterLine = document.createElement('a');
+    chapterLine.textContent = chapter.title || chapter.number;
+    chapterLine.href =
+    `/chapter.html?runner=${encodeURIComponent(runnerName)}&id=${encodeURIComponent(comicId)}&chapterId=${encodeURIComponent(chapter.chapterId)}`;
+    return chapterLine;
+}
+window.onload = chapters;
+</script>
+</head>
+<body>
+<h2>chapters</h2>
+<div id="chapters"></div>
+</body>
+</html>
