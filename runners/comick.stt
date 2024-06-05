@@ -263,7 +263,7 @@ class Target {
     }
     async getChapters(contentId) {
         const manga = await this.getManga(contentId);
-        const { hid } = manga.comic;
+        const { chapter_count: limit, hid } = manga.comic;
         if (!hid)
             throw new Error("Could Not Get HID");
         const url = `${this.API_URL}/comic/${hid}/chapters`;
@@ -271,6 +271,7 @@ class Target {
         const { data: response } = await this.client.get(url, {
             params: {
                 ...(lang && lang !== "all" && { lang }),
+                ...(limit && { limit }),
                 ...{ tachiyomi: "true" },
             },
         });
