@@ -45,7 +45,7 @@ export class Target
   info: RunnerInfo = {
     id: "app.comick",
     name: "ComicK",
-    version: 0.55,
+    version: 0.56,
     website: "https://comick.io/home",
     supportedLanguages: [],
     thumbnail: "comick.png",
@@ -64,14 +64,15 @@ export class Target
     const manga = await this.getManga(contentId);
     const { chapter_count: limit, hid } = manga.comic;
 
-    if (!limit || !hid) throw new Error("Could Not Get Chapter Count");
+    if (!hid) throw new Error("Could Not Get HID");
 
     const url = `${this.API_URL}/comic/${hid}/chapters`;
     const lang = (await ObjectStore.string("chapter_lang")) ?? "en";
     const { data: response } = await this.client.get(url, {
       params: {
         ...(lang && lang !== "all" && { lang }),
-        ...{ tachiyomi: "true", limit },
+        ...(limit && { limit }),
+        ...{ tachiyomi: "true" },
       },
     });
 
