@@ -106,6 +106,7 @@ export const MangaToContent = (data: any, contentId: string): Content => {
     cover_url: cover,
     translation_completed,
     md_comic_md_genres: mdGenres,
+    iso639_1: iso_lang,
   } = comic;
   const creators: string[] = artists
     .map((v: Base) => v.name)
@@ -176,6 +177,12 @@ export const MangaToContent = (data: any, contentId: string): Content => {
     if (user_follow_count) b += user_follow_count;
     genTags.push(`${b} Follows`);
   }
+  try {
+    const languageNames = new Intl.DisplayNames(['en'], {
+      type: 'language'
+    });
+    if (iso_lang) genTags.push(`Original: ${languageNames.of(iso_lang.replace("_", "-"))}`);
+  } catch (_) {}
 
   if (translation_completed) genTags.push("Translation Completed");
   if (comment_count) genTags.push(`${comment_count} Onsite Comments`);
