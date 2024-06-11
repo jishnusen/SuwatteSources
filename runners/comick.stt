@@ -248,7 +248,7 @@ class Target {
     info = {
         id: "app.comick",
         name: "ComicK",
-        version: 0.56,
+        version: 0.57,
         website: "https://comick.io/home",
         supportedLanguages: [],
         thumbnail: "comick.png",
@@ -539,7 +539,7 @@ const MangaToHighlight = (manga) => {
 exports.MangaToHighlight = MangaToHighlight;
 const MangaToContent = (data, contentId) => {
     const { comic, artists, authors, matureContent } = data;
-    const { title, links, hentai, user_follow_count, follow_rank, comment_count, follow_count, desc: summary, year, bayesian_rating, md_titles, mu_comics, status: ckStatus, cover_url: cover, translation_completed, md_comic_md_genres: mdGenres, } = comic;
+    const { title, links, hentai, user_follow_count, follow_rank, comment_count, follow_count, desc: summary, year, bayesian_rating, md_titles, mu_comics, status: ckStatus, cover_url: cover, translation_completed, md_comic_md_genres: mdGenres, iso639_1: iso_lang, } = comic;
     const creators = artists
         .map((v) => v.name)
         .concat(authors.map((v) => v.name));
@@ -603,6 +603,14 @@ const MangaToContent = (data, contentId) => {
             b += user_follow_count;
         genTags.push(`${b} Follows`);
     }
+    try {
+        const languageNames = new Intl.DisplayNames(['en'], {
+            type: 'language'
+        });
+        if (iso_lang)
+            genTags.push(`Original: ${languageNames.of(iso_lang.replace("_", "-"))}`);
+    }
+    catch (_) { }
     if (translation_completed)
         genTags.push("Translation Completed");
     if (comment_count)
