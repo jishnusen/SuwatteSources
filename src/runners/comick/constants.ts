@@ -5,6 +5,7 @@ export const SORT_OPTIONS: Option[] = [
   { title: "Most Viewed", id: "view" },
   { title: "Top Rated", id: "rating" },
   { title: "Last Updated", id: "uploaded" },
+  { title: "Created At", id: "created_at" },
 ];
 
 export const TYPE_OPTIONS = [

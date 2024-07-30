@@ -45,7 +45,7 @@ export class Target
   info: RunnerInfo = {
     id: "app.comick",
     name: "ComicK",
-    version: 0.57,
+    version: 0.58,
     website: "https://comick.io/home",
     supportedLanguages: [],
     thumbnail: "comick.png",
@@ -103,7 +103,7 @@ export class Target
   }
   async getDirectory(request: DirectoryRequest): Promise<PagedResult> {
     const { queryString, core: params } = parseSearchRequest(request);
-    const url = `${this.API_URL}/v1.0/search?${queryString.replace("&", "")}`;
+    const url = `${this.API_URL}/v1.0/search?${queryString.replace(/&$/, "")}`;
     const response = await this.client.get(url, { params });
     const data: MangaExcerpt[] = JSON.parse(response.data);
     return {
