@@ -8,6 +8,7 @@ exports.SORT_OPTIONS = [
     { title: "Most Viewed", id: "view" },
     { title: "Top Rated", id: "rating" },
     { title: "Last Updated", id: "uploaded" },
+    { title: "Created At", id: "created_at" },
 ];
 exports.TYPE_OPTIONS = [
     { title: "Manga", id: "jp" },
@@ -248,7 +249,7 @@ class Target {
     info = {
         id: "app.comick",
         name: "ComicK",
-        version: 0.57,
+        version: 0.58,
         website: "https://comick.io/home",
         supportedLanguages: [],
         thumbnail: "comick.png",
@@ -297,7 +298,7 @@ class Target {
     }
     async getDirectory(request) {
         const { queryString, core: params } = (0, utilts_1.parseSearchRequest)(request);
-        const url = `${this.API_URL}/v1.0/search?${queryString.replace("&", "")}`;
+        const url = `${this.API_URL}/v1.0/search?${queryString.replace(/&$/, "")}`;
         const response = await this.client.get(url, { params });
         const data = JSON.parse(response.data);
         return {
@@ -470,12 +471,12 @@ exports.MDComicToHighlight = exports.CKChapterToChapter = exports.MangaToContent
 const daisuke_1 = require("@suwatte/daisuke");
 const parseSearchRequest = (request) => {
     const limit = 30;
-    const sort = request.sort ?? "view";
+    const sort = request.sort ?? { id: "view" };
     const page = request.page ?? 1;
     const type = "comic";
     const advanced = "1";
     const tachiyomi = "true";
-    let queryString = "";
+    let queryString = `sort=${sort.id}`;
     const { content_type, demographic, genres, completed } = request.filters ?? {};
     if (completed)
         queryString += `&completed=true`;
