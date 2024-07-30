@@ -14,12 +14,12 @@ export const parseSearchRequest = (
   request: DirectoryRequest<PopulatedFilter>
 ) => {
   const limit = 30;
-  const sort = request.sort ?? "view";
+  const sort = request.sort ?? { id: "view" };
   const page = request.page ?? 1;
   const type = "comic";
   const advanced = "1";
   const tachiyomi = "true";
-  let queryString = "";
+  let queryString = `sort=${sort.id}`;
 
   const { content_type, demographic, genres, completed } =
     request.filters ?? {};
