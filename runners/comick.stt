@@ -249,7 +249,7 @@ class Target {
     info = {
         id: "app.comick",
         name: "ComicK",
-        version: 0.58,
+        version: 0.59,
         website: "https://comick.io/home",
         supportedLanguages: [],
         thumbnail: "comick.png",
@@ -392,7 +392,7 @@ class Target {
     }
     homepage;
     async willResolveSectionsForPage(_link) {
-        const { data } = await this.client.get("https://comick.io/home");
+        const { data } = await this.client.get("https://comick.io/home2");
         const str = data
             .split(`<script id="__NEXT_DATA__" type="application/json">`)
             .pop()
