@@ -1,0 +1,1002 @@
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.STTPackage = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AUTHENTICATED_CLIENT = exports.authenticated = void 0;
+const daisuke_1 = require("@suwatte/daisuke");
+async function authenticated() {
+    return await ObjectStore.boolean("authenticated");
+}
+exports.authenticated = authenticated;
+exports.AUTHENTICATED_CLIENT = new daisuke_1.NetworkClientBuilder()
+    .addRequestInterceptor(async (req) => {
+    const token = await SecureStore.string("jwt");
+    req.headers = {
+        ...(req.headers || {}),
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+    };
+    return req;
+})
+    .build();
+
+},{"@suwatte/daisuke":5}],2:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MUAuthentication = void 0;
+const daisuke_1 = require("@suwatte/daisuke");
+exports.MUAuthentication = {
+    BasicAuthUIIdentifier: daisuke_1.BasicAuthenticationUIIdentifier.USERNAME,
+    getAuthenticatedUser: async () => {
+        const authenticated = await ObjectStore.get("authenticated");
+        if (!authenticated)
+            return null;
+        try {
+            const response = await new NetworkClient().request({
+                url: "https://api.mangaupdates.com/v1/account/profile",
+                headers: {
+                    'Authorization': `Bearer ${await SecureStore.string("jwt")}`,
+                    'Content-type': 'application/json',
+                }
+            });
+            const profile = JSON.parse(response.data);
+            return {
+                handle: String(profile.user_id),
+                displayName: profile.username,
+                avatar: profile.avatar.url,
+            };
+        }
+        catch (err) {
+            console.error(err.message);
+            await SecureStore.remove("jwt");
+            await ObjectStore.remove("authenticated");
+        }
+        return null;
+    },
+    handleUserSignOut: async () => {
+        throw "Not ready";
+    },
+    handleBasicAuth: async (identifier, password) => {
+        const client = new NetworkClient();
+        try {
+            const response = await client.request({
+                url: "https://api.mangaupdates.com/v1/account/login",
+                method: "PUT",
+                headers: {
+                    'Content-type': 'application/json',
+                },
+                body: {
+                    "username": identifier,
+                    "password": password,
+                }
+            });
+            await ObjectStore.set("authenticated", true);
+            await SecureStore.set("jwt", JSON.parse(response.data).context.session_token);
+        }
+        catch (err) {
+            throw err;
+        }
+    },
+};
+
+},{"@suwatte/daisuke":5}],3:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TrackerImplementation = void 0;
+const daisuke_1 = require("@suwatte/daisuke");
+const auth_1 = require("../api/auth");
+const client = auth_1.AUTHENTICATED_CLIENT;
+const STATUS_MAP = {
+    ["CURRENT"]: 0,
+    [daisuke_1.TrackStatus.READING]: 0,
+    [daisuke_1.TrackStatus.PLANNING]: 1,
+    [daisuke_1.TrackStatus.COMPLETED]: 2,
+    [daisuke_1.TrackStatus.PAUSED]: 4,
+    [daisuke_1.TrackStatus.DROPPED]: 3,
+    [daisuke_1.TrackStatus.REREADING]: 0,
+};
+const LIST_MAP = {
+    // @ts-ignore
+    [0]: "CURRENT",
+    [1]: daisuke_1.TrackStatus.PLANNING,
+    [2]: daisuke_1.TrackStatus.COMPLETED,
+    [4]: daisuke_1.TrackStatus.PAUSED,
+    [3]: daisuke_1.TrackStatus.DROPPED,
+};
+exports.TrackerImplementation = {
+    async didUpdateLastReadChapter(id, progress) {
+        return client.post("https://api.mangaupdates.com/v1/lists/series/update", {
+            body: [
+                {
+                    series: {
+                        id: Number(id),
+                    },
+                    status: progress
+                }
+            ]
+        }).then();
+    },
+    async getResultsForTitles(titles) {
+        return client.post("https://api.mangaupdates.com/v1/series/search", {
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: {
+                search: titles[0],
+            }
+        }).then((res) => {
+            return JSON.parse(res.data).results.map((result) => {
+                const record = result.record;
+                return ({
+                    id: String(record.series_id),
+                    title: decodeURI(record.title),
+                    cover: record.image?.url.original ?? "",
+                    webUrl: record.url,
+                });
+            });
+        });
+    },
+    async getTrackItem(id) {
+        const series_url = (() => {
+            if (/^[0-9]+$/.test(id))
+                return "https://www.mangaupdates.com/series.html?id=";
+            else
+                return "https://www.mangaupdates.com/series/";
+        })();
+        const source_id = ((await client.get(series_url + id))
+            .data.match(/https:\/\/api.mangaupdates.com\/v1\/series\/([0-9]+)\/rss/) || [])[1];
+        const record = JSON.parse((await client.get("https://api.mangaupdates.com/v1/series/" + source_id)).data);
+        const highlight = {
+            id: String(record.series_id),
+            title: decodeURI(record.title),
+            cover: record.image?.url.original ?? "",
+            webUrl: record.url,
+        };
+        try {
+            const list_status = JSON.parse((await client.get("https://api.mangaupdates.com/v1/lists/series/" + record.series_id)).data);
+            const series_meta = JSON.parse((await client.get("https://api.mangaupdates.com/v1/series/" + record.series_id)).data);
+            const status = LIST_MAP[list_status.list_id];
+            const progress = {
+                lastReadChapter: list_status.status.chapter,
+                lastReadVolume: list_status.status.volume,
+                maxAvailableChapter: series_meta.latest_chapter,
+            };
+            const entry = { status, progress };
+            return { ...highlight, entry };
+        }
+        catch (_) {
+            return highlight;
+        }
+    },
+    beginTracking: async function (id, status) {
+        await client.post("https://api.mangaupdates.com/v1/lists/series", {
+            body: [
+                {
+                    series: {
+                        id: Number(id),
+                    },
+                    list_id: STATUS_MAP[status],
+                    status: {
+                        volume: 0,
+                        chapter: 0
+                    }
+                }
+            ]
+        });
+    },
+    getEntryForm: async function (id) {
+        const { entry } = await this.getTrackItem(id);
+        return (0, daisuke_1.Generate)({
+            sections: [
+                // Progress
+                (0, daisuke_1.Generate)({
+                    header: "Reading Progress",
+                    children: [
+                        (0, daisuke_1.UIStepper)({
+                            id: "progress",
+                            title: "Chapter",
+                            value: entry?.progress.lastReadChapter,
+                            upperBound: entry?.progress.maxAvailableChapter,
+                            allowDecimal: true,
+                        }),
+                        (0, daisuke_1.UIStepper)({
+                            id: "progressVolumes",
+                            title: "Volume",
+                            value: entry?.progress.lastReadVolume ?? 0,
+                        }),
+                    ],
+                }),
+            ]
+        });
+    },
+    async didSubmitEntryForm(id, form) {
+        return client.post("https://api.mangaupdates.com/v1/lists/series/update", {
+            body: [
+                {
+                    series: {
+                        id: Number(id),
+                    },
+                    status: {
+                        volume: form.progressVolumes,
+                        chapter: form.progress,
+                    }
+                }
+            ]
+        }).then();
+    },
+    didUpdateStatus: async function (id, status) {
+        await client.post("https://api.mangaupdates.com/v1/lists/series/update", {
+            body: [
+                {
+                    series: {
+                        id: Number(id),
+                    },
+                    list_id: STATUS_MAP[status],
+                }
+            ]
+        });
+    },
+};
+
+},{"../api/auth":1,"@suwatte/daisuke":5}],4:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Target = void 0;
+const auth_1 = require("./impl/auth");
+const tracker_1 = require("./impl/tracker");
+const info = {
+    id: "com.mangaupdates",
+    name: "MangaUpdates",
+    version: 0.1,
+    website: "https://mangaupdates.com",
+    thumbnail: "mangaupdates.png",
+};
+const config = {
+    linkKeys: ["mangaupdates", "mu", "mangaupdates.com"],
+};
+exports.Target = {
+    info,
+    config,
+    ...tracker_1.TrackerImplementation,
+    ...auth_1.MUAuthentication,
+};
+
+},{"./impl/auth":2,"./impl/tracker":3}],5:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./runners"), exports);
+__exportStar(require("./types"), exports);
+
+},{"./runners":29,"./types":59}],6:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+
+},{}],7:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],8:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],9:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],10:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],11:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],12:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],13:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],14:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],15:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./ContentEvent"), exports);
+__exportStar(require("./ChapterEvent"), exports);
+__exportStar(require("./ProgressSync"), exports);
+__exportStar(require("./LibrarySync"), exports);
+__exportStar(require("./StreamContextProvider"), exports);
+__exportStar(require("./ContextMenuHandler"), exports);
+__exportStar(require("./GroupedUpdateProvider"), exports);
+__exportStar(require("./ImageRedrawHandler"), exports);
+
+},{"./ChapterEvent":7,"./ContentEvent":8,"./ContextMenuHandler":9,"./GroupedUpdateProvider":10,"./ImageRedrawHandler":11,"./LibrarySync":12,"./ProgressSync":13,"./StreamContextProvider":14}],16:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./handlers"), exports);
+__exportStar(require("./ContentSource"), exports);
+
+},{"./ContentSource":6,"./handlers":15}],17:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],18:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],19:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./ContentTracker"), exports);
+__exportStar(require("./AdvancedTracker"), exports);
+
+},{"./AdvancedTracker":17,"./ContentTracker":18}],20:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BasicAuthenticationUIIdentifier = void 0;
+var BasicAuthenticationUIIdentifier;
+(function (BasicAuthenticationUIIdentifier) {
+    BasicAuthenticationUIIdentifier[BasicAuthenticationUIIdentifier["EMAIL"] = 0] = "EMAIL";
+    BasicAuthenticationUIIdentifier[BasicAuthenticationUIIdentifier["USERNAME"] = 1] = "USERNAME";
+})(BasicAuthenticationUIIdentifier || (exports.BasicAuthenticationUIIdentifier = BasicAuthenticationUIIdentifier = {}));
+
+},{}],21:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],22:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],23:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],24:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],25:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],26:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],27:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Authentication"), exports);
+__exportStar(require("./Preferences"), exports);
+__exportStar(require("./ImageRequest"), exports);
+__exportStar(require("./DirectoryHandler"), exports);
+__exportStar(require("./PageProvider"), exports);
+__exportStar(require("./Setup"), exports);
+__exportStar(require("./PageResolver"), exports);
+
+},{"./Authentication":20,"./DirectoryHandler":21,"./ImageRequest":22,"./PageProvider":23,"./PageResolver":24,"./Preferences":25,"./Setup":26}],28:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RunnerEnvironment = void 0;
+__exportStar(require("./extensions"), exports);
+var RunnerEnvironment;
+(function (RunnerEnvironment) {
+    RunnerEnvironment[RunnerEnvironment["SOURCE"] = 0] = "SOURCE";
+    RunnerEnvironment[RunnerEnvironment["TRACKER"] = 1] = "TRACKER";
+})(RunnerEnvironment || (exports.RunnerEnvironment = RunnerEnvironment = {}));
+
+},{"./extensions":27}],29:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./ContentSource"), exports);
+__exportStar(require("./Runner"), exports);
+__exportStar(require("./ContentTracker"), exports);
+
+},{"./ContentSource":16,"./ContentTracker":19,"./Runner":28}],30:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],31:[function(require,module,exports){
+"use strict";
+// Picker
+Object.defineProperty(exports, "__esModule", { value: true });
+
+},{}],32:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.UIStepper = exports.UIButton = exports.UIDatePicker = exports.UITextField = exports.UIToggle = exports.UIMultiPicker = exports.UIPicker = void 0;
+const UIElements_1 = require("./UIElements");
+const UIPicker = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.SELECT }));
+exports.UIPicker = UIPicker;
+const UIMultiPicker = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.MULTISELECT }));
+exports.UIMultiPicker = UIMultiPicker;
+const UIToggle = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.TOGGLE }));
+exports.UIToggle = UIToggle;
+const UITextField = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.TEXTFIELD }));
+exports.UITextField = UITextField;
+const UIDatePicker = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.DATEPICKER }));
+exports.UIDatePicker = UIDatePicker;
+const UIButton = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.BUTTON }));
+exports.UIButton = UIButton;
+const UIStepper = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.STEPPER }));
+exports.UIStepper = UIStepper;
+
+},{"./UIElements":33}],33:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.UIComponentType = void 0;
+var UIComponentType;
+(function (UIComponentType) {
+    UIComponentType[UIComponentType["SELECT"] = 0] = "SELECT";
+    UIComponentType[UIComponentType["MULTISELECT"] = 1] = "MULTISELECT";
+    UIComponentType[UIComponentType["STEPPER"] = 2] = "STEPPER";
+    UIComponentType[UIComponentType["TOGGLE"] = 3] = "TOGGLE";
+    UIComponentType[UIComponentType["TEXTFIELD"] = 4] = "TEXTFIELD";
+    UIComponentType[UIComponentType["BUTTON"] = 5] = "BUTTON";
+    UIComponentType[UIComponentType["DATEPICKER"] = 6] = "DATEPICKER";
+})(UIComponentType || (exports.UIComponentType = UIComponentType = {}));
+
+},{}],34:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Form"), exports);
+__exportStar(require("./UIElements"), exports);
+__exportStar(require("./UIDefinitions"), exports);
+__exportStar(require("./UIElementBuilders"), exports);
+
+},{"./Form":30,"./UIDefinitions":31,"./UIElementBuilders":32,"./UIElements":33}],35:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],36:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DefinedLanguages = void 0;
+var DefinedLanguages;
+(function (DefinedLanguages) {
+    DefinedLanguages["UNIVERSAL"] = "UNIVERSAL";
+    DefinedLanguages["ENGLISH"] = "en_US";
+    DefinedLanguages["KOREAN"] = "ko_KR";
+    DefinedLanguages["JAPANESE"] = "ja_JP";
+    DefinedLanguages["FRENCH"] = "fr_FR";
+    DefinedLanguages["CHINESE"] = "zh-CN";
+    DefinedLanguages["SPANISH"] = "es_ES";
+    DefinedLanguages["PORTUGUESE"] = "pt_BR";
+})(DefinedLanguages || (exports.DefinedLanguages = DefinedLanguages = {}));
+
+},{}],37:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],38:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],39:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],40:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],41:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],42:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],43:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ContentType = exports.ReadingFlag = exports.ReadingMode = exports.PublicationStatus = void 0;
+// Enums
+var PublicationStatus;
+(function (PublicationStatus) {
+    PublicationStatus[PublicationStatus["ONGOING"] = 1] = "ONGOING";
+    PublicationStatus[PublicationStatus["COMPLETED"] = 2] = "COMPLETED";
+    PublicationStatus[PublicationStatus["CANCELLED"] = 3] = "CANCELLED";
+    PublicationStatus[PublicationStatus["HIATUS"] = 4] = "HIATUS";
+})(PublicationStatus || (exports.PublicationStatus = PublicationStatus = {}));
+/**
+ * The method in which the content can be read
+ */
+var ReadingMode;
+(function (ReadingMode) {
+    ReadingMode[ReadingMode["PAGED_MANGA"] = 0] = "PAGED_MANGA";
+    ReadingMode[ReadingMode["PAGED_COMIC"] = 1] = "PAGED_COMIC";
+    ReadingMode[ReadingMode["PAGED_VERTICAL"] = 2] = "PAGED_VERTICAL";
+    ReadingMode[ReadingMode["WEBTOON"] = 3] = "WEBTOON";
+})(ReadingMode || (exports.ReadingMode = ReadingMode = {}));
+var ReadingFlag;
+(function (ReadingFlag) {
+    ReadingFlag[ReadingFlag["READING"] = 0] = "READING";
+    ReadingFlag[ReadingFlag["PLANNED"] = 1] = "PLANNED";
+    ReadingFlag[ReadingFlag["COMPLETED"] = 2] = "COMPLETED";
+    ReadingFlag[ReadingFlag["DROPPED"] = 3] = "DROPPED";
+    ReadingFlag[ReadingFlag["REREADING"] = 4] = "REREADING";
+    ReadingFlag[ReadingFlag["PAUSED"] = 5] = "PAUSED";
+    ReadingFlag[ReadingFlag["UNKNOWN"] = 6] = "UNKNOWN";
+})(ReadingFlag || (exports.ReadingFlag = ReadingFlag = {}));
+var ContentType;
+(function (ContentType) {
+    ContentType[ContentType["MANGA"] = 0] = "MANGA";
+    ContentType[ContentType["MANHUA"] = 1] = "MANHUA";
+    ContentType[ContentType["MANHWA"] = 2] = "MANHWA";
+    ContentType[ContentType["COMIC"] = 3] = "COMIC";
+    ContentType[ContentType["NOVEL"] = 4] = "NOVEL";
+})(ContentType || (exports.ContentType = ContentType = {}));
+
+},{}],44:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],45:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],46:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],47:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ProviderLinkType = void 0;
+var ProviderLinkType;
+(function (ProviderLinkType) {
+    ProviderLinkType[ProviderLinkType["WEBSITE"] = 0] = "WEBSITE";
+    ProviderLinkType[ProviderLinkType["TWITTER"] = 1] = "TWITTER";
+    ProviderLinkType[ProviderLinkType["DISCORD"] = 2] = "DISCORD";
+    ProviderLinkType[ProviderLinkType["PATREON"] = 3] = "PATREON";
+})(ProviderLinkType || (exports.ProviderLinkType = ProviderLinkType = {}));
+
+},{}],48:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],49:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Content"), exports);
+__exportStar(require("./Highlight"), exports);
+__exportStar(require("./Chapter"), exports);
+__exportStar(require("./ChapterData"), exports);
+__exportStar(require("./Property"), exports);
+__exportStar(require("./Collection"), exports);
+__exportStar(require("./Provider"), exports);
+__exportStar(require("./Enums"), exports);
+__exportStar(require("./ReaderContext"), exports);
+__exportStar(require("./ContextMenu"), exports);
+__exportStar(require("./DeepLinkContext"), exports);
+__exportStar(require("./BooleanState"), exports);
+__exportStar(require("./ContentProgressState"), exports);
+__exportStar(require("./GroupedUpdatesResponse"), exports);
+
+},{"./BooleanState":35,"./Chapter":36,"./ChapterData":37,"./Collection":38,"./Content":39,"./ContentProgressState":40,"./ContextMenu":41,"./DeepLinkContext":42,"./Enums":43,"./GroupedUpdatesResponse":44,"./Highlight":45,"./Property":46,"./Provider":47,"./ReaderContext":48}],50:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AuthMethod = void 0;
+var AuthMethod;
+(function (AuthMethod) {
+    AuthMethod[AuthMethod["USERNAME_PW"] = 0] = "USERNAME_PW";
+    AuthMethod[AuthMethod["EMAIL_PW"] = 1] = "EMAIL_PW";
+    AuthMethod[AuthMethod["WEB"] = 2] = "WEB";
+    AuthMethod[AuthMethod["OAUTH"] = 3] = "OAUTH";
+})(AuthMethod || (exports.AuthMethod = AuthMethod = {}));
+
+},{}],51:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],52:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],53:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CatalogRating = void 0;
+var CatalogRating;
+(function (CatalogRating) {
+    /**
+     * Catalog does not contain ANY SUGGESTIVE OR NSFW content
+     */
+    CatalogRating[CatalogRating["SAFE"] = 0] = "SAFE";
+    /**
+     * Catalog may contain SUGGESTIVE OR NSFW content,
+     * runners must hide NSFW content by default,
+     * users will be required to verify they are of age to view NSFW content
+     */
+    CatalogRating[CatalogRating["MIXED"] = 1] = "MIXED";
+    /**
+     * Catalog contains MAINLY SUGGESTIVE OR NSFW content,
+     * users will be required to verify they are of age to view NSFW content
+     */
+    CatalogRating[CatalogRating["NSFW"] = 2] = "NSFW";
+})(CatalogRating || (exports.CatalogRating = CatalogRating = {}));
+
+},{}],54:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Authentication"), exports);
+__exportStar(require("./RunnerInfo"), exports);
+__exportStar(require("./PagedResult"), exports);
+__exportStar(require("./ContextProvider"), exports);
+
+},{"./Authentication":50,"./ContextProvider":51,"./PagedResult":52,"./RunnerInfo":53}],55:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],56:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FilterType = void 0;
+var FilterType;
+(function (FilterType) {
+    /**
+     * This Represents the filter as a toggle switch, the value returned in the directory request will be a `boolean`
+     */
+    FilterType[FilterType["TOGGLE"] = 0] = "TOGGLE";
+    /**
+     * This represents the filter as a picker, the value returned will be the `key` of the selected option as a `string`
+     */
+    FilterType[FilterType["SELECT"] = 1] = "SELECT";
+    /**
+     * This Represents the filter as a multi-picker, the value returned will the the keys of the selected options as an array of strings
+     */
+    FilterType[FilterType["MULTISELECT"] = 2] = "MULTISELECT";
+    /**
+     * This Represents the filter as a multi-picker,the value returned will be of type {@link ExcludableMultiSelectProp}
+     */
+    FilterType[FilterType["EXCLUDABLE_MULTISELECT"] = 3] = "EXCLUDABLE_MULTISELECT";
+    /**
+     * This will represent the filter as a textfield, the value returned will be a string
+     */
+    FilterType[FilterType["TEXT"] = 4] = "TEXT";
+    /**
+     * This is a basic filter that will only display the title or subtitle, it will not return any value in the populated `DirectoryRequest`
+     */
+    FilterType[FilterType["INFO"] = 5] = "INFO";
+})(FilterType || (exports.FilterType = FilterType = {}));
+
+},{}],57:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],58:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./DirectoryConfig"), exports);
+__exportStar(require("./DirectoryRequest"), exports);
+__exportStar(require("./DirectoryFilter"), exports);
+
+},{"./DirectoryConfig":55,"./DirectoryFilter":56,"./DirectoryRequest":57}],59:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Generate = void 0;
+__exportStar(require("./core"), exports);
+__exportStar(require("./content"), exports);
+__exportStar(require("./networking"), exports);
+__exportStar(require("./UI"), exports);
+__exportStar(require("./tracker"), exports);
+__exportStar(require("./directory"), exports);
+__exportStar(require("./page"), exports);
+const Generate = (v) => v;
+exports.Generate = Generate;
+
+},{"./UI":34,"./content":49,"./core":54,"./directory":58,"./networking":66,"./page":67,"./tracker":68}],60:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NetworkClientBuilder = void 0;
+/**
+ * NetworkClientBuilder is a builder class used for creating and configuring instances of NetworkClient.
+ * The builder allows you to configure various aspects of the NetworkClient, such as rate limits,
+ * request/response transformers (interceptors), headers, cookies, timeout, status validator, and more.
+ */
+class NetworkClientBuilder {
+    constructor() {
+        // Array of functions that transform requests
+        this.requestTransformers = [];
+        // Array of functions that transform responses
+        this.responseTransformers = [];
+        // Object representing HTTP headers, where each key-value pair represents a header
+        this.headers = {};
+        // Array of cookies
+        this.cookies = [];
+    }
+    /**
+     * Sets the rate limit for the NetworkClient.
+     *
+     * @param requests - The maximum number of requests to make per interval.
+     * @param interval - The length of the rate limiting interval in seconds.
+     * @returns The builder, to allow for method chaining.
+     */
+    setRateLimit(requests, interval) {
+        this.requestsPerSecond = requests / interval;
+        return this;
+    }
+    /**
+     * Adds a request interceptor to the NetworkClient.
+     *
+     * @param transformer - The interceptor to add. This should be a function that takes a request and modifies it in some way.
+     * @returns The builder, to allow for method chaining.
+     */
+    addRequestInterceptor(transformer) {
+        this.requestTransformers.push(transformer);
+        return this;
+    }
+    /**
+     * Adds a response interceptor to the NetworkClient.
+     *
+     * @param transformer - The interceptor to add. This should be a function that takes a response and modifies it in some way.
+     * @returns The builder, to allow for method chaining.
+     */
+    addResponseInterceptor(transformer) {
+        this.responseTransformers.push(transformer);
+        return this;
+    }
+    /**
+     * Sets the authorization token for the NetworkClient.
+     *
+     * @param token - The token to be included in the Authorization header of every request.
+     * @returns The builder, to allow for method chaining.
+     */
+    setAuthorizationToken(token) {
+        return this.addHeader("Authorization", token);
+    }
+    /**
+     * Sets the status validator for the NetworkClient.
+     *
+     * @param validator - A function that takes a status code and returns true if it is considered successful.
+     * @returns The builder, to allow for method chaining.
+     */
+    setStatusValidator(validator) {
+        this.statusValidator = validator;
+        return this;
+    }
+    /**
+     * Sets the timeout for requests made by the NetworkClient.
+     *
+     * @param timeout - The maximum time to wait for a request to complete, in milliseconds.
+     * @returns The builder, to allow for method chaining.
+     */
+    setTimeout(timeout) {
+        this.timeout = timeout;
+        return this;
+    }
+    /**
+     * Sets the maximum number of retries for this request by the NetworkClient.
+     *
+     * @param retries - The maximum number of retries for this request
+     * @returns The builder, to allow for method chaining.
+     */
+    setMaxRetries(retries) {
+        this.maxRetries = retries;
+        return this;
+    }
+    /**
+     * Sets a header for the NetworkClient.
+     *
+     * @param key - The name of the header
+     * @param value - The value of the header
+     * @returns The builder, to allow for method chaining.
+     */
+    addHeader(key, value) {
+        this.headers[key] = value;
+        return this;
+    }
+    /**
+     * Sets a cookie for the NetworkClient.
+     *
+     * @param cookie - The cookie to be included in every request.
+     * @returns The builder, to allow for method chaining.
+     */
+    addCookie(cookie) {
+        this.cookies.push(cookie);
+        return this;
+    }
+    /**
+     * Builds a NetworkClient using the parameters set on the builder.
+     *
+     * @returns A NetworkClient with the configured parameters.
+     */
+    build() {
+        return new NetworkClient(this);
+    }
+}
+exports.NetworkClientBuilder = NetworkClientBuilder;
+
+},{}],61:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],62:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],63:[function(require,module,exports){
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.name = void 0;
+const name = (base, known) => __awaiter(void 0, void 0, void 0, function* () {
+    return Object.assign(Object.assign({}, base), known);
+});
+exports.name = name;
+
+},{}],64:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],65:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],66:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Builder"), exports);
+__exportStar(require("./Client"), exports);
+__exportStar(require("./Request"), exports);
+__exportStar(require("./Response"), exports);
+__exportStar(require("./Transformer"), exports);
+__exportStar(require("./Error"), exports);
+
+},{"./Builder":60,"./Client":61,"./Error":62,"./Request":63,"./Response":64,"./Transformer":65}],67:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SectionStyle = void 0;
+var SectionStyle;
+(function (SectionStyle) {
+    SectionStyle[SectionStyle["DEFAULT"] = 0] = "DEFAULT";
+    SectionStyle[SectionStyle["INFO"] = 1] = "INFO";
+    SectionStyle[SectionStyle["GALLERY"] = 2] = "GALLERY";
+    SectionStyle[SectionStyle["NAVIGATION_LIST"] = 3] = "NAVIGATION_LIST";
+    SectionStyle[SectionStyle["ITEM_LIST"] = 4] = "ITEM_LIST";
+    SectionStyle[SectionStyle["PADDED_LIST"] = 5] = "PADDED_LIST";
+    SectionStyle[SectionStyle["TAG"] = 6] = "TAG";
+    SectionStyle[SectionStyle["STANDARD_GRID"] = 7] = "STANDARD_GRID";
+})(SectionStyle || (exports.SectionStyle = SectionStyle = {}));
+
+},{}],68:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TrackStatus = void 0;
+var TrackStatus;
+(function (TrackStatus) {
+    TrackStatus["READING"] = "READING";
+    TrackStatus["PLANNING"] = "PLANNING";
+    TrackStatus["COMPLETED"] = "COMPLETED";
+    TrackStatus["PAUSED"] = "PAUSED";
+    TrackStatus["DROPPED"] = "DROPPED";
+    TrackStatus["REREADING"] = "REREADING";
+})(TrackStatus || (exports.TrackStatus = TrackStatus = {}));
+
+},{}]},{},[4])(4)
+});
