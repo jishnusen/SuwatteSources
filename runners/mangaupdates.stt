@@ -103,17 +103,33 @@ const LIST_MAP = {
     [3]: daisuke_1.TrackStatus.DROPPED,
 };
 exports.TrackerImplementation = {
-    async didUpdateLastReadChapter(id, progress) {
-        return client.post("https://api.mangaupdates.com/v1/lists/series/update", {
-            body: [
-                {
-                    series: {
-                        id: Number(id),
-                    },
-                    status: progress
-                }
-            ]
-        }).then();
+    async didUpdateLastReadChapter(id_, progress) {
+        const { id } = await this.getTrackItem(id_);
+        try {
+            await client.post("https://api.mangaupdates.com/v1/lists/series/update", {
+                body: [
+                    {
+                        series: {
+                            id: Number(id),
+                        },
+                        status: progress
+                    }
+                ]
+            });
+        }
+        catch (e) {
+            await this.beginTracking(id, daisuke_1.TrackStatus.READING);
+            await client.post("https://api.mangaupdates.com/v1/lists/series/update", {
+                body: [
+                    {
+                        series: {
+                            id: Number(id),
+                        },
+                        status: progress
+                    }
+                ]
+            });
+        }
     },
     async getResultsForTitles(titles) {
         return client.post("https://api.mangaupdates.com/v1/series/search", {
@@ -246,7 +262,7 @@ const tracker_1 = require("./impl/tracker");
 const info = {
     id: "com.mangaupdates",
     name: "MangaUpdates",
-    version: 0.1,
+    version: 0.2,
     website: "https://mangaupdates.com",
     thumbnail: "mangaupdates.png",
 };
