@@ -1,5 +1,4 @@
-import {
-  ContentTracker,
+import {  ContentTracker,
   Form,
   FormSection,
   Generate,
@@ -36,20 +35,36 @@ const LIST_MAP: {[key: number]: TrackStatus} = {
 
 export const TrackerImplementation: Omit<ContentTracker, "info"> = {
 
-  async didUpdateLastReadChapter(id: string, progress: TrackProgressUpdate): Promise<void> {
-      return client.post(
+  async didUpdateLastReadChapter(id_: string, progress: TrackProgressUpdate): Promise<void> {
+    const { id } = await this.getTrackItem(id_);
+    try {
+      await client.post(
         "https://api.mangaupdates.com/v1/lists/series/update",
-        {
-        body: [
           {
-            series: {
-              id: Number(id),
-            },
-            status: progress
-          }
-        ]
-      }
-    ).then()
+          body: [
+            {
+              series: {
+                id: Number(id),
+              },
+              status: progress
+            }
+          ]
+        });
+    } catch (e) {
+      await this.beginTracking(id, TrackStatus.READING);
+      await client.post(
+        "https://api.mangaupdates.com/v1/lists/series/update",
+          {
+          body: [
+            {
+              series: {
+                id: Number(id),
+              },
+              status: progress
+            }
+          ]
+        });
+    }
   },
 
   async getResultsForTitles(titles: string[]): Promise<Highlight[]> {

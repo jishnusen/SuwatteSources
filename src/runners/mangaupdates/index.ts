@@ -10,7 +10,7 @@ import { TrackerImplementation } from "./impl/tracker";
 const info: RunnerInfo = {
   id: "com.mangaupdates",
   name: "MangaUpdates",
-  version: 0.1,
+  version: 0.2,
   website: "https://mangaupdates.com",
   thumbnail: "mangaupdates.png",
 };
