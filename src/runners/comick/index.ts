@@ -45,7 +45,7 @@ export class Target
   info: RunnerInfo = {
     id: "app.comick",
     name: "ComicK",
-    version: 0.60,
+    version: 0.59,
     website: "https://comick.io/home",
     supportedLanguages: [],
     thumbnail: "comick.png",
@@ -60,10 +60,10 @@ export class Target
     const content = MangaToContent(data, contentId);
     return content;
   }
-  async getChapters(contentId: string, limit_ = 0): Promise<Chapter[]> {
+  async getChapters(contentId: string): Promise<Chapter[]> {
     const manga = await this.getManga(contentId);
     const { chapter_count, hid } = manga.comic;
-    const limit = Math.max(limit_, chapter_count);
+    const limit = Math.max(chapter_count, 1000);
 
     if (!hid) throw new Error("Could Not Get HID");
 
@@ -77,10 +77,7 @@ export class Target
       },
     });
 
-    const { total, chapters: data } = JSON.parse(response);
-    if (total != limit) {
-      return this.getChapters(contentId, total)
-    }
+    const { chapters: data } = JSON.parse(response);
     const chapters: Chapter[] = data.map((v: any, index: number) => ({
       ...CKChapterToChapter(v),
       contentId,
