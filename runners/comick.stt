@@ -262,9 +262,10 @@ class Target {
         const content = (0, utilts_1.MangaToContent)(data, contentId);
         return content;
     }
-    async getChapters(contentId) {
+    async getChapters(contentId, limit_ = 0) {
         const manga = await this.getManga(contentId);
-        const { chapter_count: limit, hid } = manga.comic;
+        const { chapter_count, hid } = manga.comic;
+        const limit = Math.max(limit_, chapter_count);
         if (!hid)
             throw new Error("Could Not Get HID");
         const url = `${this.API_URL}/comic/${hid}/chapters`;
@@ -276,7 +277,10 @@ class Target {
                 ...{ tachiyomi: "true" },
             },
         });
-        const { chapters: data } = JSON.parse(response);
+        const { total, chapters: data } = JSON.parse(response);
+        if (total != limit) {
+            return this.getChapters(contentId, total);
+        }
         const chapters = data.map((v, index) => ({
             ...(0, utilts_1.CKChapterToChapter)(v),
             contentId,
