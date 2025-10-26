@@ -36,7 +36,7 @@ describe("Asura Scans Tests", () => {
       expect(data.results.length).toBeGreaterThan(1);
     });
   });
-  const id = "/manga/4622438374-player-who-returned-10000-years-later/";
+  const id = "/series/the-greatest-estate-developer-4ced06a0";
 
   test("Profile", async () => {
     const content = await source.getContent(id);
@@ -45,13 +45,14 @@ describe("Asura Scans Tests", () => {
 
   test("Chapters", async () => {
     const chapters = await source.getChapters(id);
+    console.log(chapters);
     expect(ChapterSchema.array().parse(chapters)).toEqual(expect.any(Array));
     expect(chapters.length).toBeGreaterThan(1);
   });
 
   test("Reader", async () => {
     const chapterId =
-      "/1398222385-player-who-returned-10000-years-later-chapter-1/";
+      "/series/the-greatest-estate-developer-4ced06a0/chapter/113";
     const data = await source.getChapterData(id, chapterId);
     expect(ChapterDataSchema.parse(data)).toEqual(expect.any(Object));
   });

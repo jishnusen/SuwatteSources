@@ -169,7 +169,7 @@ export class Template extends TachiParsedHttpSource {
       });
   }
   chapterFromElement(
-    element: CheerioElement,
+    element: CheerioElement
   ): Omit<Chapter, "number" | "index" | "volume" | "language"> {
     const a = element.find("a").first();
     let url = this.getUrlWithoutDomain(a.attr("href") ?? "");
@@ -194,6 +194,41 @@ export class Template extends TachiParsedHttpSource {
 
   // Pages
   pageListParse(document: CheerioAPI): string[] {
+    const scripts = document("script")
+      .toArray()
+      .filter((script) =>
+        document(script).text().includes("self.__next_f.push")
+      )
+      .map((script) => document(script).text())
+      .join("");
+
+    const re = /\\"pages\\":(\[.*?\])/;
+    const pagesJSON = scripts.match(re);
+    if (pagesJSON) {
+      const json = JSON.parse(pagesJSON[1].replaceAll('\\"', '"')) as {
+        url: string;
+      }[];
+      const pages: string[] = json.map((value) => {
+        return value.url;
+      });
+
+      if (pages.length != 0) {
+        return pages;
+      }
+    }
+
+    const pages: string[] = [];
+    for (const image of document('img[alt*="chapter"]').toArray()) {
+      const img = document(image).attr("src") ?? "";
+      if (!img) continue;
+
+      pages.push(img);
+    }
+
+    if (pages.length != 0) {
+      return pages;
+    }
+
     // 1) Try __NEXT_DATA__ JSON structure if present
     const nextDataRaw = document("script#__NEXT_DATA__").text();
     if (nextDataRaw) {
@@ -287,7 +322,7 @@ export class Template extends TachiParsedHttpSource {
       return (arr as string[]).filter((u) => /^https?:\/\//.test(u));
     }
     const urls = arr
-      .map((v) => (v && typeof v === "object" ? (v.url ?? v.src ?? "") : ""))
+      .map((v) => (v && typeof v === "object" ? v.url ?? v.src ?? "" : ""))
       .filter((u) => typeof u === "string" && /^https?:\/\//.test(u));
     return urls as string[];
   }
