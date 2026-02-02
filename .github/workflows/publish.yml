@@ -17,7 +17,7 @@ jobs:
       - run: find ./src/runners -type d -mindepth 1 | cut -f4 -d/ | grep -vE "^$(cat source_whitelist | paste -sd'|' -)\$" | xargs -I{} /bin/sh -c "echo {} && rm -rf src/runners/{}"
       - run: npm ci
       - run: npm run build
-      - uses: JamesIves/github-pages-deploy-action@4.8.0
+      - uses: JamesIves/github-pages-deploy-action@4.7.4
         with:
             branch: gh-pages
             folder: stt
