@@ -186,7 +186,9 @@ exports.Template = Template;
 },{"../../template/mangathemesia":4,"./types":3,"@suwatte/daisuke":13}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.api_to_chapter = exports.api_to_content = exports.api_to_title = void 0;
+exports.api_to_title = api_to_title;
+exports.api_to_content = api_to_content;
+exports.api_to_chapter = api_to_chapter;
 const daisuke_1 = require("@suwatte/daisuke");
 const tachiyomi_1 = require("../../template/tachiyomi");
 function api_to_title(comic, cdnUrl) {
@@ -203,7 +205,6 @@ function api_to_title(comic, cdnUrl) {
         },
     };
 }
-exports.api_to_title = api_to_title;
 function api_to_content(comic, cdnUrl) {
     return {
         title: comic.title,
@@ -235,12 +236,11 @@ function api_to_content(comic, cdnUrl) {
         recommendedPanelMode: daisuke_1.ReadingMode.WEBTOON,
     };
 }
-exports.api_to_content = api_to_content;
 function api_to_chapter(chapter, cdnUrl) {
     return {
         chapterId: `${chapter.series.series_slug}/${chapter.chapter_slug}`,
         number: new tachiyomi_1.ChapterRecognition().parseChapterNumber("", chapter.chapter_name),
-        index: 0,
+        index: 0, // placeholder
         date: new Date(chapter.created_at ?? new Date()),
         language: "en",
         title: chapter.chapter_title,
@@ -256,7 +256,6 @@ function api_to_chapter(chapter, cdnUrl) {
         })(chapter.chapter_thumbnail),
     };
 }
-exports.api_to_chapter = api_to_chapter;
 
 },{"../../template/tachiyomi":7,"@suwatte/daisuke":13}],4:[function(require,module,exports){
 "use strict";
