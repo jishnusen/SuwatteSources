@@ -189,7 +189,7 @@ export class Template extends TachiParsedHttpSource {
     const clean = rawDate.replace(/(\d+)(st|nd|rd|th)/gi, "$1");
     const date = moment(clean, "MMMM D YYYY").toDate();
 
-    return { chapterId: url, title, date };
+    return { chapterId: title, title, date, webUrl: url };
   }
 
   // Pages
