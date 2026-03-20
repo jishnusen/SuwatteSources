@@ -18,7 +18,7 @@ import { CheerioAPI, load } from "cheerio";
 import moment from "moment";
 
 export class Template extends TachiParsedHttpSource {
-  baseUrl = "https://asuracomic.net";
+  baseUrl = "https://asurascans.com";
   lang = "en";
   name = "Asura Scans";
   supportsLatest = true;
@@ -368,7 +368,7 @@ export class Template extends TachiParsedHttpSource {
     types: Option[];
   }> {
     if (this.cachedFilters) return this.cachedFilters;
-    const url = "https://gg.asuracomic.net/api/series/filters";
+    const url = "https://gg.asurascans.com/api/series/filters";
     const { data } = await this.client.request({
       url,
       headers: this.headers(),

@@ -5,8 +5,8 @@ import { Template } from "./template";
 const info: RunnerInfo = {
   id: "asurascans",
   name: "Asura Scans",
-  version: 0.35,
-  website: "https://asuracomic.net",
+  version: 0.36,
+  website: "https://asurascans.com",
   thumbnail: "asurascan.png",
 };
 
