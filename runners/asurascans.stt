@@ -7,8 +7,8 @@ const template_1 = require("./template");
 const info = {
     id: "asurascans",
     name: "Asura Scans",
-    version: 0.35,
-    website: "https://asuracomic.net",
+    version: 0.36,
+    website: "https://asurascans.com",
     thumbnail: "asurascan.png",
 };
 class TachiBuilder2 extends tachiyomi_1.TachiBuilder {
@@ -31,7 +31,7 @@ const tachiyomi_1 = require("../../template/tachiyomi");
 const cheerio_1 = require("cheerio");
 const moment_1 = __importDefault(require("moment"));
 class Template extends tachiyomi_1.TachiParsedHttpSource {
-    baseUrl = "https://asuracomic.net";
+    baseUrl = "https://asurascans.com";
     lang = "en";
     name = "Asura Scans";
     supportsLatest = true;
@@ -361,7 +361,7 @@ class Template extends tachiyomi_1.TachiParsedHttpSource {
     async fetchFilters() {
         if (this.cachedFilters)
             return this.cachedFilters;
-        const url = "https://gg.asuracomic.net/api/series/filters";
+        const url = "https://gg.asurascans.com/api/series/filters";
         const { data } = await this.client.request({
             url,
             headers: this.headers(),
